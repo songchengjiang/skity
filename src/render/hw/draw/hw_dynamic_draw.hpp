@@ -26,6 +26,8 @@ class HWDynamicDraw : public HWDraw {
     }
   }
 
+  bool OnMergeIfPossible(HWDraw* draw) override;
+
  protected:
   HWDrawState OnPrepare(HWDrawContext* context) override;
 

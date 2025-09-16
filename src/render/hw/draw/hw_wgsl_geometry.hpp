@@ -32,7 +32,17 @@ class HWWGSLGeometry {
   virtual std::string GenSourceWGSL() const = 0;
 
   virtual const char* GetEntryPoint() const = 0;
+  /**
+   * Check if this geometry can be merged with other geometry.
+   * If two geometries can be merged, they will share the same vertex buffer
+   * and index buffer.
+   *
+   * @param other the other geometry to be checked.
+   * @return true if can be merged, false otherwise.
+   */
+  virtual bool CanMerge(const HWWGSLGeometry* other) const { return false; }
 
+  virtual void Merge(const HWWGSLGeometry* other) {}
   /**
    * Fill the command with the vertex data and uniform data.
    *

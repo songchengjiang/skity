@@ -6,6 +6,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <skity/graphic/paint.hpp>
+#include <skity/geometry/matrix.hpp>
 
 #include "src/render/hw/draw/fragment/wgsl_text_fragment.hpp"
 #include "src/render/hw/draw/geometry/wgsl_text_geometry.hpp"
@@ -164,13 +165,15 @@ HWDraw* DirectGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
   atlas_->UploadAtlas(group_index_);
   auto gpu_texture = atlas_->GetGPUTexture(group_index_);
 
+  Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
+  Matrix final_transform = HWDynamicTextDraw::CalcTransform(transform, text_transform);
   HWWGSLGeometry* geometry;
   if (paint_.GetShader()) {
-    geometry = arena_allocator->Make<WGSLTextGradientGeometry>(
+    geometry = arena_allocator->Make<WGSLTextGradientGeometry>(final_transform,
         std::move(glyph_rects), paint_.GetShader()->GetLocalMatrix(),
-        transform);
+        text_transform);
   } else {
-    geometry = arena_allocator->Make<WGSLTextSolidColorGeometry>(
+    geometry = arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform,
         std::move(glyph_rects));
   }
 
@@ -203,9 +206,8 @@ HWDraw* DirectGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
     fragment->SetFilter(WGXFilterFragment::Make(paint_.GetColorFilter().get()));
   }
 
-  Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
   HWDynamicTextDraw* text_draw = arena_allocator->Make<HWDynamicTextDraw>(
-      transform, text_transform, paint_.GetBlendMode(), geometry, fragment);
+      Matrix(), paint_.GetBlendMode(), geometry, fragment);
   bounds_ = text_draw->GetTransform().MapRect(bounds_);
   return text_draw;
 }
@@ -408,8 +410,12 @@ HWDraw* SDFGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
   auto gpu_texture = atlas_->GetGPUTexture(group_index_);
   Vector color = paint_.GetFillColor();
 
+  Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
+  Matrix final_transform = HWDynamicSdfTextDraw::CalcTransform(text_transform, 1.0f);
+
   WGSLTextSolidColorGeometry* geometry =
-      arena_allocator->Make<WGSLTextSolidColorGeometry>(std::move(glyph_rects));
+      arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform, std::move(glyph_rects));
+
 
   auto gpu_sampler =
       atlas_->GetGPUSampler(group_index_, GPUFilterMode::kLinear);
@@ -420,10 +426,9 @@ HWDraw* SDFGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
     fragment->SetFilter(WGXFilterFragment::Make(paint_.GetColorFilter().get()));
   }
 
-  Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
   // need to apply sdf scale to draw other than glyph
   HWDynamicSdfTextDraw* text_draw = arena_allocator->Make<HWDynamicSdfTextDraw>(
-      text_transform, 1.f, paint_.GetBlendMode(), geometry, fragment);
+      Matrix(), paint_.GetBlendMode(), geometry, fragment);
   bounds_ = text_draw->GetTransform().MapRect(bounds_);
   return text_draw;
 }

@@ -81,6 +81,17 @@ void WGSLTextGeometry::PrepareCMD(Command* cmd, HWDrawContext* context,
   UploadBindGroup(common_slot, cmd, context);
 }
 
+bool WGSLTextGeometry::CanMerge(const HWWGSLGeometry* other) const {
+  return GetShaderName() == other->GetShaderName();
+}
+void WGSLTextGeometry::Merge(const HWWGSLGeometry* other) {
+  auto o = static_cast<const WGSLTextGeometry*>(other);
+  for (auto&& glyph_rect : o->glyph_rects_) {
+    glyph_rects_.emplace_back(std::move(glyph_rect));
+  }
+
+}
+
 std::string WGSLTextSolidColorGeometry::GenSourceWGSL() const {
   std::string wgsl_code = CommonVertexWGSL();
 
@@ -168,6 +179,11 @@ void WGSLTextGradientGeometry::PrepareCMD(Command* cmd, HWDrawContext* context,
   entry->type_definition->SetData(&inv_matrix_, sizeof(Matrix));
 
   UploadBindGroup(entry, cmd, context);
+}
+
+bool WGSLTextGradientGeometry::CanMerge(const HWWGSLGeometry* other) const {
+  //TODO: Support in the future
+  return false;
 }
 
 }  // namespace skity
