@@ -20,7 +20,7 @@ void HWDynamicTextDraw::OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
 }
 
 Matrix HWDynamicTextDraw::CalcTransform(const Matrix& canvas_transform,
-                                        const Matrix& text_transform) const {
+                                        const Matrix& text_transform) {
   // Only support linear text transforms for now
   if (canvas_transform.GetScaleX() == text_transform.GetScaleX() &&
       canvas_transform.GetScaleY() == text_transform.GetScaleY() &&
@@ -40,6 +40,20 @@ Matrix HWDynamicTextDraw::CalcTransform(const Matrix& canvas_transform,
   return Matrix{};
 }
 
+bool HWDynamicTextDraw::OnMergeIfPossible(HWDraw* draw) {
+  if (!HWDynamicDraw::OnMergeIfPossible(draw)) {
+    return false;
+  }
+  auto other = static_cast<HWDynamicTextDraw*>(draw);
+  if (!geometry_->CanMerge(other->geometry_) ||
+      !fragment_->CanMerge(other->fragment_)) {
+    return false;
+  }
+  geometry_->Merge(other->geometry_);
+  fragment_->Merge(other->fragment_);
+  return true;
+}
+
 void HWDynamicSdfTextDraw::OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
                                               HWDrawContext* context) {
   if (geometry_ == nullptr || fragment_ == nullptr) {
@@ -51,7 +65,7 @@ void HWDynamicSdfTextDraw::OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
 }
 
 Matrix HWDynamicSdfTextDraw::CalcTransform(const Matrix& transform,
-                                           const float scale) const {
+                                           const float scale) {
   return transform * Matrix::Scale(1.f / scale, 1.f / scale);
 }
 

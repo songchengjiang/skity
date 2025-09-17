@@ -50,4 +50,11 @@ void HWDynamicDraw::OnGenerateCommand(HWDrawContext* context,
   }
 }
 
+bool HWDynamicDraw::OnMergeIfPossible(HWDraw* draw) {
+  if (blend_mode_ != static_cast<HWDynamicDraw*>(draw)->blend_mode_) {
+    return false;
+  }
+  return true;
+}
+
 }  // namespace skity

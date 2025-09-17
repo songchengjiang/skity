@@ -58,6 +58,8 @@ class WGSLTextFragment : public HWWGSLFragment {
 
   const char* GetEntryPoint() const override { return "fs_main"; }
 
+  bool CanMerge(const HWWGSLFragment* other) const override;
+
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
 
  private:
@@ -80,6 +82,8 @@ class WGSLColorTextFragment : public WGSLTextFragment {
 
   std::string GenSourceWGSL() const override;
 
+  bool CanMerge(const HWWGSLFragment* other) const override;
+
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
 
  private:
@@ -100,6 +104,8 @@ class WGSLColorEmojiFragment : public WGSLTextFragment {
   std::string GetShaderName() const override;
 
   uint32_t NextBindingIndex() const override;
+
+  bool CanMerge(const HWWGSLFragment* other) const override;
 
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
 
@@ -130,6 +136,8 @@ class WGSLGradientTextFragment : public WGSLTextFragment {
 
   std::string GenSourceWGSL() const override;
 
+  bool CanMerge(const HWWGSLFragment* other) const override;
+
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
 
  private:
@@ -153,6 +161,8 @@ class WGSLSdfColorTextFragment : public WGSLTextFragment {
   uint32_t NextBindingIndex() const override;
 
   std::string GenSourceWGSL() const override;
+
+  bool CanMerge(const HWWGSLFragment* other) const override;
 
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
 

@@ -71,6 +71,19 @@ void WGSLTextFragment::PrepareCMD(Command* cmd, HWDrawContext* context) {
   }
 }
 
+bool WGSLTextFragment::CanMerge(const HWWGSLFragment* other) const {
+  auto o = static_cast<const WGSLTextFragment*>(other);
+  for (size_t i = 0; i < textures_.size(); i++) {
+    if (textures_[i] != o->textures_[i]) {
+      return false;
+    }
+  }
+  if (sampler_ != o->sampler_) {
+    return false;
+  }
+  return true;
+}
+
 std::string WGSLColorTextFragment::GetShaderName() const {
   std::string name = "ColorTextFragmentWGSL";
 
@@ -143,6 +156,20 @@ void WGSLColorTextFragment::PrepareCMD(Command* cmd, HWDrawContext* context) {
   }
 }
 
+bool WGSLColorTextFragment::CanMerge(const HWWGSLFragment* other) const {
+  if (!WGSLTextFragment::CanMerge(other)) {
+    return false;
+  }
+  if (GetShaderName() != other->GetShaderName()) {
+    return false;
+  }
+  auto o = static_cast<const WGSLColorTextFragment*>(other);
+  if (color_ != o->color_) {
+    return false;
+  }
+  return true;
+}
+
 std::string WGSLColorEmojiFragment::GetShaderName() const {
   std::string name = "ColorEmoji";
 
@@ -180,6 +207,20 @@ void WGSLColorEmojiFragment::PrepareCMD(Command* cmd, HWDrawContext* context) {
   if (filter_ != nullptr) {
     filter_->SetupBindGroup(cmd, context);
   }
+}
+
+bool WGSLColorEmojiFragment::CanMerge(const HWWGSLFragment* other) const {
+  if (!WGSLTextFragment::CanMerge(other)) {
+    return false;
+  }
+  if (GetShaderName() != other->GetShaderName()) {
+    return false;
+  }
+  auto o = static_cast<const WGSLColorEmojiFragment*>(other);
+  if (swizzle_rb_ != o->swizzle_rb_ || alpha_ != o->alpha_) {
+    return false;
+  }
+  return true;
 }
 
 std::string WGSLColorEmojiFragment::GenSourceWGSL() const {
@@ -359,6 +400,11 @@ void WGSLGradientTextFragment::PrepareCMD(Command* cmd,
   }
 }
 
+bool WGSLGradientTextFragment::CanMerge(const HWWGSLFragment* other) const {
+  //TODO: Support in the future
+  return false;
+}
+
 /// SDF fragment shader
 void WGSLSdfColorTextFragment::PrepareCMD(Command* cmd,
                                           HWDrawContext* context) {
@@ -446,6 +492,20 @@ std::string WGSLSdfColorTextFragment::GenSourceWGSL() const {
   )";
 
   return wgsl_code;
+}
+
+bool WGSLSdfColorTextFragment::CanMerge(const HWWGSLFragment* other) const {
+  if (!WGSLTextFragment::CanMerge(other)) {
+    return false;
+  }
+  if (GetShaderName() != other->GetShaderName()) {
+    return false;
+  }
+  auto o = static_cast<const WGSLSdfColorTextFragment*>(other);
+  if (color_ != o->color_) {
+    return false;
+  }
+  return true;
 }
 
 }  // namespace skity

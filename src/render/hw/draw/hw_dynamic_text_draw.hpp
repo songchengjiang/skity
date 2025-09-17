@@ -13,23 +13,26 @@ namespace skity {
 
 class HWDynamicTextDraw : public HWDynamicDraw {
  public:
-  HWDynamicTextDraw(const Matrix& canvas_transform,
-                    const Matrix& text_transform, BlendMode blend_mode,
+  HWDynamicTextDraw(const Matrix& transform, BlendMode blend_mode,
                     HWWGSLGeometry* geometry, HWWGSLFragment* fragment)
-      : HWDynamicDraw(CalcTransform(canvas_transform, text_transform),
+      : HWDynamicDraw(transform,
                       blend_mode),
         geometry_(geometry),
         fragment_(fragment) {}
 
   ~HWDynamicTextDraw() override = default;
 
+  HWDrawType GetDrawType() const override { return HWDrawType::kText; }
+
+  bool OnMergeIfPossible(HWDraw* draw) override;
+
+  static Matrix CalcTransform(const Matrix& canvas_transform,
+                       const Matrix& text_transform);
+
  protected:
   void OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
                           HWDrawContext* context) override;
 
- private:
-  Matrix CalcTransform(const Matrix& canvas_transform,
-                       const Matrix& text_transform) const;
 
   HWWGSLGeometry* geometry_;
   HWWGSLFragment* fragment_;
@@ -37,21 +40,20 @@ class HWDynamicTextDraw : public HWDynamicDraw {
 
 class HWDynamicSdfTextDraw : public HWDynamicDraw {
  public:
-  HWDynamicSdfTextDraw(const Matrix& transform, const float scale,
+  HWDynamicSdfTextDraw(const Matrix& transform,
                        BlendMode blend_mode, HWWGSLGeometry* geometry,
                        HWWGSLFragment* fragment)
-      : HWDynamicDraw(CalcTransform(transform, scale), blend_mode),
+      : HWDynamicDraw(transform, blend_mode),
         geometry_(geometry),
         fragment_(fragment) {}
 
   ~HWDynamicSdfTextDraw() override = default;
 
+  static Matrix CalcTransform(const Matrix& transform, const float scale);
+
  protected:
   void OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
                           HWDrawContext* context) override;
-
- private:
-  Matrix CalcTransform(const Matrix& transform, const float scale) const;
 
   HWWGSLGeometry* geometry_;
   HWWGSLFragment* fragment_;

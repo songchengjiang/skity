@@ -30,6 +30,10 @@ class HWWGSLFragment {
   virtual const char* GetEntryPoint() const = 0;
 
   virtual uint32_t NextBindingIndex() const = 0;
+  
+  virtual bool CanMerge(const HWWGSLFragment* other) const { return false; }
+
+  virtual void Merge(const HWWGSLFragment* other) {}
 
   /**
    * Fill the command with the uniform data.
