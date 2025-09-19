@@ -5,8 +5,8 @@
 #include "src/render/text/glyph_run.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
-#include <skity/graphic/paint.hpp>
 #include <skity/geometry/matrix.hpp>
+#include <skity/graphic/paint.hpp>
 
 #include "src/render/hw/draw/fragment/wgsl_text_fragment.hpp"
 #include "src/render/hw/draw/geometry/wgsl_text_geometry.hpp"
@@ -166,15 +166,16 @@ HWDraw* DirectGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
   auto gpu_texture = atlas_->GetGPUTexture(group_index_);
 
   Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
-  Matrix final_transform = HWDynamicTextDraw::CalcTransform(transform, text_transform);
+  Matrix final_transform =
+      HWDynamicTextDraw::CalcTransform(transform, text_transform);
   HWWGSLGeometry* geometry;
   if (paint_.GetShader()) {
-    geometry = arena_allocator->Make<WGSLTextGradientGeometry>(final_transform,
-        std::move(glyph_rects), paint_.GetShader()->GetLocalMatrix(),
-        text_transform);
+    geometry = arena_allocator->Make<WGSLTextGradientGeometry>(
+        final_transform, std::move(glyph_rects),
+        paint_.GetShader()->GetLocalMatrix(), transform);
   } else {
-    geometry = arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform,
-        std::move(glyph_rects));
+    geometry = arena_allocator->Make<WGSLTextSolidColorGeometry>(
+        final_transform, std::move(glyph_rects));
   }
 
   HWWGSLFragment* fragment;
@@ -411,11 +412,12 @@ HWDraw* SDFGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
   Vector color = paint_.GetFillColor();
 
   Matrix text_transform = transform * Matrix::Translate(origin_.x, origin_.y);
-  Matrix final_transform = HWDynamicSdfTextDraw::CalcTransform(text_transform, 1.0f);
+  Matrix final_transform =
+      HWDynamicSdfTextDraw::CalcTransform(text_transform, 1.0f);
 
   WGSLTextSolidColorGeometry* geometry =
-      arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform, std::move(glyph_rects));
-
+      arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform,
+                                                        std::move(glyph_rects));
 
   auto gpu_sampler =
       atlas_->GetGPUSampler(group_index_, GPUFilterMode::kLinear);
