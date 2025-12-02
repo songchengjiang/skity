@@ -60,12 +60,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "OHOS" OR CMAKE_SYSTEM_NAME STREQUAL "Linux" OR EM
   endif()
 
   if(TARGET jsoncpp_static)
-    add_library(JsonCpp::JsonCpp ALIAS jsoncpp_static)
+    target_link_libraries(skity PUBLIC jsoncpp_static)
   elseif(TARGET jsoncpp_lib)
-    add_library(JsonCpp::JsonCpp ALIAS jsoncpp_lib)
+    target_link_libraries(skity PUBLIC jsoncpp_lib)
   endif()
-
-  target_link_libraries(skity PUBLIC JsonCpp::JsonCpp)
 
 endif()
 
