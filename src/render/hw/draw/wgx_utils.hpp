@@ -62,7 +62,7 @@ bool SetupImageBoundsInfo(const wgx::BindGroupEntry* image_bounds_entry,
                           float height);
 
 HWWGSLFragment* GenShadingFragment(HWDrawContext* context, const Paint& paint,
-                                   bool is_stroke);
+                                   bool is_stroke, bool has_color = true);
 /**
  * Common code generator for Gradient Shader.
  * It contains the struct for common gradient info:

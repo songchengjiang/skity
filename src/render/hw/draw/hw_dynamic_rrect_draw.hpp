@@ -11,6 +11,7 @@
 
 #include "src/render/hw/draw/hw_dynamic_draw.hpp"
 #include "src/render/hw/draw/hw_wgsl_geometry.hpp"
+#include "src/utils/batch_group.hpp"
 
 namespace skity {
 
@@ -20,13 +21,16 @@ class HWDynamicRRectDraw : public HWDynamicDraw {
 
   ~HWDynamicRRectDraw() override = default;
 
+  HWDrawType GetDrawType() const override { return HWDrawType::kRRect; }
+
+  bool OnMergeIfPossible(HWDraw* draw) override;
+
  protected:
-  void OnGenerateDrawStep(ArrayList<HWDrawStep *, 2> &steps,
-                          HWDrawContext *context) override;
+  void OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
+                          HWDrawContext* context) override;
 
  private:
-  RRect rrect_;
-  Paint paint_;
+  std::vector<BatchGroup<RRect>> batch_group_;
 };
 
 }  // namespace skity

@@ -10,12 +10,13 @@
 
 #include "src/render/hw/draw/hw_wgsl_geometry.hpp"
 #include "src/render/hw/hw_stage_buffer.hpp"
+#include "src/utils/batch_group.hpp"
 
 namespace skity {
 
 class WGSLRRectGeometry : public HWWGSLGeometry {
  public:
-  WGSLRRectGeometry(const RRect& rrect, const Paint& paint);
+  explicit WGSLRRectGeometry(const std::vector<BatchGroup<RRect>>& batch_group);
 
   ~WGSLRRectGeometry() override = default;
 
@@ -45,8 +46,7 @@ class WGSLRRectGeometry : public HWWGSLGeometry {
   static GPUBufferView CreateIndexBufferView(HWStageBuffer* stage_bufer);
 
  private:
-  const RRect& rrect_;
-  const Paint& paint_;
+  const std::vector<BatchGroup<RRect>>& batch_group_;
   std::vector<GPUVertexBufferLayout> layout_;
 };
 
