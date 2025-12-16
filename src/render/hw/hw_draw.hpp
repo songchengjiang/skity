@@ -26,6 +26,7 @@ class GPUContextImpl;
 enum class HWDrawType {
   kUnknow,
   kPath,
+  kRRect,
   kText,
   kBlur,
   kStencil,
@@ -120,8 +121,7 @@ class HWDraw {
       return false;
     }
 
-    if (GetTransform() != draw->GetTransform() ||
-        GetClipDraw() != draw->GetClipDraw() ||
+    if (GetClipDraw() != draw->GetClipDraw() ||
         GetScissorBox() != draw->GetScissorBox()) {
       return false;
     }

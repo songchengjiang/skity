@@ -11,6 +11,7 @@
 #include <skity/text/font.hpp>
 #include <skity/text/text_blob.hpp>
 
+#include "skity/geometry/rrect.hpp"
 #include "src/effect/image_filter_base.hpp"
 #include "src/gpu/gpu_surface_impl.hpp"
 #include "src/render/canvas_state.hpp"
@@ -557,10 +558,7 @@ void HWCanvas::OnDrawImageRect(std::shared_ptr<Image> image, const Rect& src,
                                    TileMode::kDecal, local_matrix);
   work_paint.SetShader(std::move(shader));
 
-  Path path;
-  path.AddRect(dst);
-
-  OnDrawPath(path, work_paint);
+  OnDrawRRect(RRect::MakeRect(dst), work_paint);
 }
 
 void HWCanvas::OnRestore() {

@@ -4,6 +4,7 @@
 
 #include "src/render/hw/draw/hw_dynamic_rrect_draw.hpp"
 
+#include "src/effect/pixmap_shader.hpp"
 #include "src/render/hw/draw/geometry/wgsl_rrect_geometry.hpp"
 #include "src/render/hw/draw/step/color_step.hpp"
 #include "src/render/hw/draw/wgx_filter.hpp"
@@ -13,20 +14,52 @@ namespace skity {
 
 HWDynamicRRectDraw::HWDynamicRRectDraw(Matrix transform, RRect rrect,
                                        Paint paint)
-    : HWDynamicDraw(transform, paint.GetBlendMode()),
-      rrect_(std::move(rrect)),
-      paint_(std::move(paint)) {}
+    : HWDynamicDraw(transform, paint.GetBlendMode()) {
+  batch_group_.emplace_back(BatchGroup<RRect>{
+      std::move(rrect),
+      std::move(paint),
+      std::move(transform),
+  });
+}
 
-void HWDynamicRRectDraw::OnGenerateDrawStep(ArrayList<HWDrawStep *, 2> &steps,
-                                            HWDrawContext *context) {
+bool HWDynamicRRectDraw::OnMergeIfPossible(HWDraw* draw) {
+  if (!HWDynamicDraw::OnMergeIfPossible(draw)) {
+    return false;
+  }
+  auto rrect_draw = static_cast<HWDynamicRRectDraw*>(draw);
+  auto& rrect_group = rrect_draw->batch_group_;
+  auto& merge_paint = rrect_group.front().paint;
+  auto& paint = batch_group_.front().paint;
+
+  if (paint.GetShader() != nullptr || merge_paint.GetShader() != nullptr) {
+    return false;
+  }
+
+  if (paint.GetColorFilter() != merge_paint.GetColorFilter()) {
+    return false;
+  }
+
+  for (size_t i = 0; i < rrect_group.size(); i++) {
+    batch_group_.emplace_back(BatchGroup<RRect>{
+        std::move(rrect_group[i].item),
+        std::move(rrect_group[i].paint),
+        std::move(rrect_group[i].transform),
+    });
+  }
+
+  return true;
+}
+
+void HWDynamicRRectDraw::OnGenerateDrawStep(ArrayList<HWDrawStep*, 2>& steps,
+                                            HWDrawContext* context) {
   auto arena_allocator = context->arena_allocator;
+  auto paint = batch_group_.front().paint;
+  auto geom = arena_allocator->Make<WGSLRRectGeometry>(batch_group_);
+  auto frag = GenShadingFragment(
+      context, paint, paint.GetStyle() == Paint::kStroke_Style, false);
 
-  auto geom = arena_allocator->Make<WGSLRRectGeometry>(rrect_, paint_);
-  auto frag = GenShadingFragment(context, paint_,
-                                 paint_.GetStyle() == Paint::kStroke_Style);
-
-  if (paint_.GetColorFilter()) {
-    frag->SetFilter(WGXFilterFragment::Make(paint_.GetColorFilter().get()));
+  if (paint.GetColorFilter()) {
+    frag->SetFilter(WGXFilterFragment::Make(paint.GetColorFilter().get()));
   }
 
   steps.emplace_back(context->arena_allocator->Make<ColorStep>(

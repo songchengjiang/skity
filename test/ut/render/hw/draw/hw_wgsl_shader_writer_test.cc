@@ -17,6 +17,7 @@
 #include "src/effect/pixmap_shader.hpp"
 #include "src/render/hw/draw/fragment/wgsl_gradient_fragment.hpp"
 #include "src/render/hw/draw/fragment/wgsl_solid_color.hpp"
+#include "src/render/hw/draw/fragment/wgsl_solid_vertex_color.hpp"
 #include "src/render/hw/draw/fragment/wgsl_texture_fragment.hpp"
 #include "src/render/hw/draw/geometry/wgsl_path_geometry.hpp"
 #include "src/render/hw/draw/geometry/wgsl_rrect_geometry.hpp"
@@ -770,16 +771,16 @@ fn fs_main(input: FSInput) -> @location(0) vec4<f32> {
 std::string GetRRectGeometryVS() {
   return R"(
 struct CommonSlot {
-  mvp           : mat4x4<f32>,
-  userTransform : mat4x4<f32>,
-  extraInfo     : vec4<f32>,
+    mvp           : mat4x4<f32>,
+    userTransform : mat4x4<f32>,
+    extraInfo     : vec4<f32>,
 };
 
 fn get_vertex_position(a_pos: vec2<f32>, cs: CommonSlot) -> vec4<f32> {
-  var pos: vec4<f32> = cs.mvp * cs.userTransform * vec4<f32>(a_pos, 0.0, 1.0);
-  return vec4<f32>(pos.x, pos.y, cs.extraInfo[0] * pos.w, pos.w);
+    var pos: vec4<f32> = cs.mvp * cs.userTransform * vec4<f32>(a_pos, 0.0, 1.0);
+    return vec4<f32>(pos.x, pos.y, cs.extraInfo[0] * pos.w, pos.w);
 }
-
+  
 // 0 => (-1, -1)
 // 1 => ( 1, -1)
 // 2 => ( 1,  1)
@@ -808,16 +809,21 @@ struct VSInput {
   @location(2)  radii         :   vec2<f32>,
   @location(3)  stroke        :   vec2<f32>,
   @location(4)  j             :   vec4<f32>,
+  @location(5)  transform0    :   vec4<f32>,
+  @location(6)  transform1    :   vec2<f32>,
+  @location(7)  color         :   vec4<f32>,
 };
 
 struct VSOutput {
   @builtin(position) pos: vec4<f32>,
-  @location(0) v_fs_packed: vec4<f32>,
-  @location(1) v_rect: vec4<f32>,
-  @location(2) v_radii: vec2<f32>,
-  @location(3) v_stroke: vec2<f32>,
-  @location(4) v_j: vec4<f32>,
-  @location(5) v_inv_grid: vec2<f32>,
+  @location(0) f_color: vec4<f32>,
+  @location(1) v_fs_packed: vec4<f32>,
+  @location(2) v_rect: vec4<f32>,
+  @location(3) v_radii: vec2<f32>,
+  @location(4) v_stroke: vec2<f32>,
+  @location(5) v_j: vec4<f32>,
+  @location(6) v_inv_grid: vec2<f32>,
+
 };
 
 @vertex
@@ -871,14 +877,22 @@ fn vs_main(input: VSInput) -> VSOutput {
 
   local_pos = pos;
   var fs_packed : vec4<f32> = vec4<f32>(local_pos, f32(corner_idx), region);
-  output.pos = get_vertex_position(pos, common_slot);
+  var transform: mat4x4<f32> = mat4x4<f32>(
+    input.transform0.x, input.transform0.y, 0.0, 0.0,
+    input.transform0.z, input.transform0.w, 0.0, 0.0, 
+                   0.0,                0.0, 1.0, 0.0, 
+    input.transform1.x, input.transform1.y, 0.0, 1.0
+  );
+  var common_slot_clone: CommonSlot = common_slot;
+  common_slot_clone.userTransform = transform;
+  output.pos = get_vertex_position(pos, common_slot_clone);
   output.v_fs_packed = fs_packed;
   output.v_rect = input.rect;
   output.v_radii = input.radii;
   output.v_stroke = input.stroke;
   output.v_j = vec4<f32>(j[0], j[1]);
   output.v_inv_grid = inv_grid;
-
+  output.f_color = input.color;
   return output;
 };
 )";
@@ -890,7 +904,7 @@ fn inverse_grid_length(g: vec2<f32>, j : mat2x2<f32>) -> f32 {
   var grid: vec2<f32> = j * g;
   return 1.0 / sqrt(dot(grid, grid));
 }
-
+    
 fn ellipse_sdf(p: vec2<f32>,ab: vec2<f32>, j:mat2x2<f32>) -> f32 {
   var inv_a2b2: vec2<f32> = 1.0 / (ab * ab);
   var x2y2: vec2<f32> = p * p;
@@ -902,7 +916,7 @@ fn ellipse_sdf(p: vec2<f32>,ab: vec2<f32>, j:mat2x2<f32>) -> f32 {
 fn linearstep(edge0: f32, edge1: f32, x: f32) -> f32 {
   return clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 }
-
+ 
 // 0 => (-1, -1)
 // 1 => ( 1, -1)
 // 2 => ( 1,  1)
@@ -944,7 +958,7 @@ fn calculate_mask_alpha(v_pos: vec2<f32>, corner_idx: i32, v_region: f32, v_rect
       max_inner_d2 = max_inner_d2 * v_inv_grid;
       d_inner = max(max_inner_d2.x, max_inner_d2.y);
     }
-
+      
     // corner_idx is valid only if v_reion < 0
     if (v_region < 0) {
       var core_rect: vec4<f32> = vec4<f32>(v_rect.xy + v_radii, v_rect.zw - v_radii);
@@ -965,36 +979,37 @@ fn calculate_mask_alpha(v_pos: vec2<f32>, corner_idx: i32, v_region: f32, v_rect
         d_outer_bevel = d_outer_bevel * inverse_grid_length(corner_sign ,j);
         d_outer = max(d_outer,  d_outer_bevel);
       }
+    
 
       if needs_handle_outer_ellipse {
         d_outer = max(ellipse_sdf(pos_to_corner, v_radii + vec2<f32>(v_stroke.x), j), d_outer);
       }
-
+                           
       if needs_handle_inner_ellipse {
         d_inner = max(ellipse_sdf(pos_to_corner, v_radii - vec2<f32>(v_stroke.x), j), d_inner);
       }
     }
-
+  
     alpha = linearstep(0.5, -0.5, max(d_outer, -d_inner));
     return alpha;
   }
 }
 
-@group(1) @binding(0) var<uniform> uColor: vec4<f32>;
-
 struct FSInput {
-  @location(0) v_fs_packed: vec4<f32>,
-  @location(1) v_rect: vec4<f32>,
-  @location(2) v_radii: vec2<f32>,
-  @location(3) v_stroke: vec2<f32>,
-  @location(4) v_j: vec4<f32>,
-  @location(5) v_inv_grid: vec2<f32>,
+  @location(0) f_color: vec4<f32>,
+  @location(1) v_fs_packed: vec4<f32>,
+  @location(2) v_rect: vec4<f32>,
+  @location(3) v_radii: vec2<f32>,
+  @location(4) v_stroke: vec2<f32>,
+  @location(5) v_j: vec4<f32>,
+  @location(6) v_inv_grid: vec2<f32>,
+
 };
 
 @fragment
 fn fs_main(input: FSInput) -> @location(0) vec4<f32> {
   var color : vec4<f32>;
-  color = vec4<f32>(uColor.rgb * uColor.a, uColor.a);
+  color = vec4<f32>(input.f_color.rgb * input.f_color.a, input.f_color.a);
   var mask_alpha: f32 = 1.0;
   mask_alpha = calculate_mask_alpha(input.v_fs_packed.xy, i32(input.v_fs_packed.z), input.v_fs_packed.w, input.v_rect, input.v_radii, input.v_stroke, input.v_j, input.v_inv_grid);
   color = color * mask_alpha;
@@ -1046,6 +1061,9 @@ struct VSInput {
   @location(2)  radii         :   vec2<f32>,
   @location(3)  stroke        :   vec2<f32>,
   @location(4)  j             :   vec4<f32>,
+  @location(5)  transform0    :   vec4<f32>,
+  @location(6)  transform1    :   vec2<f32>,
+  @location(7)  color         :   vec4<f32>,
 };
 
 struct VSOutput {
@@ -1110,7 +1128,15 @@ fn vs_main(input: VSInput) -> VSOutput {
 
   local_pos = pos;
   var fs_packed : vec4<f32> = vec4<f32>(local_pos, f32(corner_idx), region);
-  output.pos = get_vertex_position(pos, common_slot);
+  var transform: mat4x4<f32> = mat4x4<f32>(
+    input.transform0.x, input.transform0.y, 0.0, 0.0,
+    input.transform0.z, input.transform0.w, 0.0, 0.0, 
+                   0.0,                0.0, 1.0, 0.0, 
+    input.transform1.x, input.transform1.y, 0.0, 1.0
+  );
+  var common_slot_clone: CommonSlot = common_slot;
+  common_slot_clone.userTransform = transform;
+  output.pos = get_vertex_position(pos, common_slot_clone);
   output.v_fs_packed = fs_packed;
   output.v_rect = input.rect;
   output.v_radii = input.radii;
@@ -1350,6 +1376,9 @@ struct VSInput {
   @location(2)  radii         :   vec2<f32>,
   @location(3)  stroke        :   vec2<f32>,
   @location(4)  j             :   vec4<f32>,
+  @location(5)  transform0    :   vec4<f32>,
+  @location(6)  transform1    :   vec2<f32>,
+  @location(7)  color         :   vec4<f32>,
 };
 
 struct VSOutput {
@@ -1414,7 +1443,15 @@ fn vs_main(input: VSInput) -> VSOutput {
 
   local_pos = pos;
   var fs_packed : vec4<f32> = vec4<f32>(local_pos, f32(corner_idx), region);
-  output.pos = get_vertex_position(pos, common_slot);
+  var transform: mat4x4<f32> = mat4x4<f32>(
+    input.transform0.x, input.transform0.y, 0.0, 0.0,
+    input.transform0.z, input.transform0.w, 0.0, 0.0, 
+                   0.0,                0.0, 1.0, 0.0, 
+    input.transform1.x, input.transform1.y, 0.0, 1.0
+  );
+  var common_slot_clone: CommonSlot = common_slot;
+  common_slot_clone.userTransform = transform;
+  output.pos = get_vertex_position(pos, common_slot_clone);
   output.v_fs_packed = fs_packed;
   output.v_rect = input.rect;
   output.v_radii = input.radii;
@@ -1606,12 +1643,12 @@ skity::Path MakePath() {
   return path;
 }
 
-static std::string ltrim(const std::string &s) {
+static std::string ltrim(const std::string& s) {
   size_t start = s.find_first_not_of(" \t\r\n");
   return (start == std::string::npos) ? "" : s.substr(start);
 }
 
-static std::vector<std::string> NormalizeLines(const std::string &input) {
+static std::vector<std::string> NormalizeLines(const std::string& input) {
   std::vector<std::string> lines;
   std::istringstream iss(input);
   std::string line;
@@ -1625,7 +1662,7 @@ static std::vector<std::string> NormalizeLines(const std::string &input) {
   return lines;
 }
 
-bool CompareShader(const std::string &actual, const std::string &expected) {
+bool CompareShader(const std::string& actual, const std::string& expected) {
   auto expLines = NormalizeLines(expected);
   auto actLines = NormalizeLines(actual);
 
@@ -1872,18 +1909,19 @@ TEST(ShaderWriter, RRectWithSolidColor) {
       skity::RRect::MakeRectXY(skity::Rect::MakeLTRB(0, 0, 100, 100), 10, 10);
   skity::Paint paint;
   paint.SetColor(0xff00ff00);
-  skity::Color4f color = paint.GetColor4f();
-  skity::WGSLRRectGeometry geometry{rrect, paint};
-  skity::WGSLSolidColor fragment{color};
+  std::vector<skity::BatchGroup<skity::RRect>> rrect_batch_group;
+  rrect_batch_group.push_back({rrect, paint});
+  skity::WGSLRRectGeometry geometry{rrect_batch_group};
+  skity::WGSLSolidVertexColor fragment{};
   skity::HWWGSLShaderWriter shader_writer{&geometry, &fragment};
   std::string vs = shader_writer.GenVSSourceWGSL();
   std::string fs = shader_writer.GenFSSourceWGSL();
   ASSERT_TRUE(geometry.IsSnippet());
   ASSERT_TRUE(fragment.IsSnippet());
   ASSERT_TRUE(geometry.AffectsFragment());
-  ASSERT_FALSE(fragment.AffectsVertex());
-  ASSERT_EQ(shader_writer.GetVSShaderName(), "VS_RRect");
-  ASSERT_EQ(shader_writer.GetFSShaderName(), "FS_SolidColor_RRect");
+  ASSERT_TRUE(fragment.AffectsVertex());
+  ASSERT_EQ(shader_writer.GetVSShaderName(), "VS_RRect_SolidVertexColor");
+  ASSERT_EQ(shader_writer.GetFSShaderName(), "FS_SolidVertexColor_RRect");
   ASSERT_TRUE(CompareShader(vs, GetRRectGeometryVS()));
   ASSERT_TRUE(CompareShader(fs, GetSolidColorRRectFS()));
 }
@@ -1902,7 +1940,9 @@ TEST(ShaderWriter, RRectWithLinearGradient) {
   };
   paint.SetShader(skity::Shader::MakeLinear(pts.data(), colors, nullptr, 2));
 
-  skity::WGSLRRectGeometry geometry{rrect, paint};
+  std::vector<skity::BatchGroup<skity::RRect>> rrect_batch_group;
+  rrect_batch_group.push_back({rrect, paint});
+  skity::WGSLRRectGeometry geometry{rrect_batch_group};
   skity::Shader::GradientInfo gradient_info;
   auto gradient_type = paint.GetShader()->AsGradient(&gradient_info);
   skity::WGSLGradientFragment fragment{gradient_info, gradient_type,
@@ -1925,7 +1965,9 @@ TEST(ShaderWriter, RRectWithTexture) {
   auto rrect =
       skity::RRect::MakeRectXY(skity::Rect::MakeLTRB(0, 0, 100, 100), 10, 10);
   skity::Paint paint;
-  skity::WGSLRRectGeometry geometry{rrect, paint};
+  std::vector<skity::BatchGroup<skity::RRect>> rrect_batch_group;
+  rrect_batch_group.push_back({rrect, paint});
+  skity::WGSLRRectGeometry geometry{rrect_batch_group};
   std::shared_ptr<skity::Pixmap> pixmap = std::make_shared<skity::Pixmap>(
       500, 500, skity::AlphaType::kUnpremul_AlphaType, skity::ColorType::kRGBA);
   auto image = skity::Image::MakeImage(pixmap);

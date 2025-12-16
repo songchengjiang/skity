@@ -117,6 +117,7 @@ target_sources(
   ${CMAKE_CURRENT_LIST_DIR}/utils/arena_allocator.cc
   ${CMAKE_CURRENT_LIST_DIR}/utils/arena_allocator.hpp
   ${CMAKE_CURRENT_LIST_DIR}/utils/array_list.hpp
+  ${CMAKE_CURRENT_LIST_DIR}/utils/batch_group.hpp
   ${CMAKE_CURRENT_LIST_DIR}/utils/list.hpp
   ${CMAKE_CURRENT_LIST_DIR}/utils/settings.cc
   ${CMAKE_CURRENT_LIST_DIR}/utils/thread_annotations.hpp
@@ -343,6 +344,8 @@ if(${SKITY_HW_RENDERER})
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_image_filter.hpp
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_solid_color.cc
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_solid_color.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_solid_vertex_color.cc
+    ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_solid_vertex_color.hpp
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_stencil_fragment.cc
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_stencil_fragment.hpp
     ${CMAKE_CURRENT_LIST_DIR}/render/hw/draw/fragment/wgsl_text_fragment.cc

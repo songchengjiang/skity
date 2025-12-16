@@ -42,7 +42,7 @@ std::vector<GPUVertexBufferLayout> InitVertexBufferLayout() {
       },
       // instance buffer
       GPUVertexBufferLayout{
-          12 * sizeof(float),
+          22 * sizeof(float),
           GPUVertexStepMode::kInstance,
           {
               GPUVertexAttribute{
@@ -65,6 +65,21 @@ std::vector<GPUVertexBufferLayout> InitVertexBufferLayout() {
                   8 * sizeof(float),
                   4,
               },
+              GPUVertexAttribute{
+                  GPUVertexFormat::kFloat32x4,
+                  12 * sizeof(float),
+                  5,
+              },
+              GPUVertexAttribute{
+                  GPUVertexFormat::kFloat32x2,
+                  16 * sizeof(float),
+                  6,
+              },
+              GPUVertexAttribute{
+                  GPUVertexFormat::kFloat32x4,
+                  18 * sizeof(float),
+                  7,
+              },
           },
       },
   };
@@ -77,16 +92,19 @@ struct Instance {
   Vec2 radii;
   Vec2 stroke;
   Vec4 m;
+  Vec4 transform0;
+  Vec2 transform1;
+  Vec4 color;
 };
 
-static_assert(sizeof(Instance) == 48);
+static_assert(sizeof(Instance) == 88);
 
 }  // namespace
 
-WGSLRRectGeometry::WGSLRRectGeometry(const RRect& rrect, const Paint& paint)
+WGSLRRectGeometry::WGSLRRectGeometry(
+    const std::vector<BatchGroup<RRect>>& batch_group)
     : HWWGSLGeometry(Flags::kSnippet | Flags::kAffectsFragment),
-      rrect_(rrect),
-      paint_(paint),
+      batch_group_(batch_group),
       layout_(InitVertexBufferLayout()) {}
 
 const std::vector<GPUVertexBufferLayout>& WGSLRRectGeometry::GetBufferLayout()
@@ -133,6 +151,9 @@ struct VSInput {
   @location(2)  radii         :   vec2<f32>,
   @location(3)  stroke        :   vec2<f32>,
   @location(4)  j             :   vec4<f32>,
+  @location(5)  transform0    :   vec4<f32>,
+  @location(6)  transform1    :   vec2<f32>,
+  @location(7)  color         :   vec4<f32>,
 };
 )";
 }
@@ -185,7 +206,15 @@ void WGSLRRectGeometry::WriteVSMain(std::stringstream& ss) const {
 
   local_pos = pos;
   var fs_packed : vec4<f32> = vec4<f32>(local_pos, f32(corner_idx), region);
-  output.pos = get_vertex_position(pos, common_slot);
+  var transform: mat4x4<f32> = mat4x4<f32>(
+    input.transform0.x, input.transform0.y, 0.0, 0.0,
+    input.transform0.z, input.transform0.w, 0.0, 0.0, 
+                   0.0,                0.0, 1.0, 0.0, 
+    input.transform1.x, input.transform1.y, 0.0, 1.0
+  );
+  var common_slot_clone: CommonSlot = common_slot;
+  common_slot_clone.userTransform = transform;
+  output.pos = get_vertex_position(pos, common_slot_clone);
   output.v_fs_packed = fs_packed;
   output.v_rect = input.rect;
   output.v_radii = input.radii;
@@ -327,41 +356,55 @@ void WGSLRRectGeometry::PrepareCMD(Command* cmd, HWDrawContext* context,
 
   cmd->index_count = cmd->index_buffer.range / sizeof(uint32_t);
 
-  const Vec2& scale = context->scale;
-  Matrix scaled_m = Matrix::Scale(scale.x, scale.y) * transform;
-  Matrix inv_m;
-  scaled_m.Invert(&inv_m);
+  context->stageBuffer->BeginWritingInstance(
+      batch_group_.size() * sizeof(Instance), alignof(Instance));
+  for (auto& element : batch_group_) {
+    const RRect& rrect = element.item;
+    const Paint& paint = element.paint;
+    const Matrix& transform = element.transform;
 
-  auto m = Vec4(inv_m.GetScaleX(), inv_m.GetSkewY(), inv_m.GetSkewX(),
-                inv_m.GetScaleY());
+    const Vec2& scale = context->scale;
+    Matrix scaled_m = Matrix::Scale(scale.x, scale.y) * transform;
+    Matrix inv_m;
+    scaled_m.Invert(&inv_m);
 
-  const Rect& rect = rrect_.GetRect();
-  const float stroke_radius =
-      paint_.GetStyle() == Paint::kStroke_Style
-          ? std::max(paint_.GetStrokeWidth() / 2.0f, 0.5f)
-          : 0.0f;
+    auto m = Vec4(inv_m.GetScaleX(), inv_m.GetSkewY(), inv_m.GetSkewX(),
+                  inv_m.GetScaleY());
 
-  static_assert(static_cast<float>(Paint::kMiter_Join) == 0.0f);
-  static_assert(static_cast<float>(Paint::kRound_Join) == 1.0f);
-  static_assert(static_cast<float>(Paint::kBevel_Join) == 2.0f);
+    const Rect& rect = rrect.GetRect();
+    const float stroke_radius =
+        paint.GetStyle() == Paint::kStroke_Style
+            ? std::max(paint.GetStrokeWidth() / 2.0f, 0.5f)
+            : 0.0f;
 
-  float join = 0.0f;
-  if (paint_.GetStyle() == Paint::kStroke_Style && rrect_.IsRect()) {
-    if (paint_.GetStrokeJoin() == Paint::kMiter_Join &&
-        paint_.GetStrokeMiter() < FloatSqrt2) {
-      join = static_cast<float>(Paint::kBevel_Join);
-    } else {
-      join = static_cast<float>(paint_.GetStrokeJoin());
+    static_assert(static_cast<float>(Paint::kMiter_Join) == 0.0f);
+    static_assert(static_cast<float>(Paint::kRound_Join) == 1.0f);
+    static_assert(static_cast<float>(Paint::kBevel_Join) == 2.0f);
+
+    float join = 0.0f;
+    if (paint.GetStyle() == Paint::kStroke_Style && rrect.IsRect()) {
+      if (paint.GetStrokeJoin() == Paint::kMiter_Join &&
+          paint.GetStrokeMiter() < FloatSqrt2) {
+        join = static_cast<float>(Paint::kBevel_Join);
+      } else {
+        join = static_cast<float>(paint.GetStrokeJoin());
+      }
     }
+
+    Instance instance = {
+        Vec4{rect.Left(), rect.Top(), rect.Right(), rect.Bottom()},
+        rrect.GetSimpleRadii(),
+        Vec2{stroke_radius, join},
+        m,
+        Vec4{transform.GetScaleX(), transform.GetSkewY(), transform.GetSkewX(),
+             transform.GetScaleY()},
+        Vec2{transform.GetTranslateX(), transform.GetTranslateY()},
+        Vec4{paint.GetColor4f()}};
+    context->stageBuffer->AppendInstance<Instance>(instance);
   }
-
-  Instance instance = {
-      Vec4{rect.Left(), rect.Top(), rect.Right(), rect.Bottom()},
-      rrect_.GetSimpleRadii(), Vec2{stroke_radius, join}, m};
-
-  cmd->instance_count = 1;
-  cmd->instance_buffer =
-      context->stageBuffer->Push(&instance, sizeof(Instance));
+  auto instance_buffer_view = context->stageBuffer->EndWritingInstance();
+  cmd->instance_count = instance_buffer_view.range / sizeof(Instance);
+  cmd->instance_buffer = instance_buffer_view;
 
   auto pipeline = cmd->pipeline;
 

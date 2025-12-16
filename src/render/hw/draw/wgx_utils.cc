@@ -11,6 +11,7 @@
 #include "src/logging.hpp"
 #include "src/render/hw/draw/fragment/wgsl_gradient_fragment.hpp"
 #include "src/render/hw/draw/fragment/wgsl_solid_color.hpp"
+#include "src/render/hw/draw/fragment/wgsl_solid_vertex_color.hpp"
 #include "src/render/hw/draw/fragment/wgsl_stencil_fragment.hpp"
 #include "src/render/hw/draw/fragment/wgsl_texture_fragment.hpp"
 #include "src/render/hw/hw_draw.hpp"
@@ -681,7 +682,7 @@ bool WGXGradientFragment::SetupSweepInfo(
 }
 
 HWWGSLFragment* GenShadingFragment(HWDrawContext* context, const Paint& paint,
-                                   bool is_stroke) {
+                                   bool is_stroke, bool has_color) {
   auto arena_allocator = context->arena_allocator;
   if (paint.GetShader()) {
     auto type = paint.GetShader()->AsGradient(nullptr);
@@ -734,7 +735,11 @@ HWWGSLFragment* GenShadingFragment(HWDrawContext* context, const Paint& paint,
             static_cast<float>(image->Height()));
 
       } else {
-        return arena_allocator->Make<WGSLSolidColor>(Colors::kRed);
+        if (has_color) {
+          return arena_allocator->Make<WGSLSolidColor>(Colors::kRed);
+        } else {
+          return arena_allocator->Make<WGSLSolidVertexColor>();
+        }
       }
 
     } else {
@@ -744,7 +749,11 @@ HWWGSLFragment* GenShadingFragment(HWDrawContext* context, const Paint& paint,
 
       Color4f fallback_color;
       if (NeedsFallbackToSolidColor(type, info, fallback_color)) {
-        return arena_allocator->Make<WGSLSolidColor>(fallback_color);
+        if (has_color) {
+          return arena_allocator->Make<WGSLSolidColor>(fallback_color);
+        } else {
+          return arena_allocator->Make<WGSLSolidVertexColor>();
+        }
       }
 
       return arena_allocator->Make<WGSLGradientFragment>(
@@ -752,9 +761,17 @@ HWWGSLFragment* GenShadingFragment(HWDrawContext* context, const Paint& paint,
     }
   } else {
     if (is_stroke) {
-      return arena_allocator->Make<WGSLSolidColor>(paint.GetStrokeColor());
+      if (has_color) {
+        return arena_allocator->Make<WGSLSolidColor>(paint.GetStrokeColor());
+      } else {
+        return arena_allocator->Make<WGSLSolidVertexColor>();
+      }
     } else {
-      return arena_allocator->Make<WGSLSolidColor>(paint.GetFillColor());
+      if (has_color) {
+        return arena_allocator->Make<WGSLSolidColor>(paint.GetFillColor());
+      } else {
+        return arena_allocator->Make<WGSLSolidVertexColor>();
+      }
     }
   }
 }
