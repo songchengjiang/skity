@@ -104,18 +104,17 @@ std::string WGSLColorTextFragment::GenSourceWGSL() const {
   }
 
   wgsl_code += R"(
-    @group(1) @binding(5) var<uniform> uColor: vec4<f32>;
-
     struct ColorTextFSInput {
       @location(0) @interpolate(flat) txt_index : i32,
-      @location(1)                    v_uv      : vec2<f32>
+      @location(1)                    v_uv      : vec2<f32>,
+      @location(2)                    v_color   : vec4<f32>
     };
 
     @fragment
     fn fs_main(vs_in : ColorTextFSInput) -> @location(0) vec4<f32> {
       var fontAlpha: f32 = get_texture_color(vs_in.txt_index, vs_in.v_uv).r;
 
-      var color: vec4<f32> = vec4<f32>(uColor.rgb * uColor.a, uColor.a);
+      var color: vec4<f32> = vec4<f32>(vs_in.v_color.rgb * vs_in.v_color.a, vs_in.v_color.a);
   )";
 
   if (filter_ != nullptr) {
@@ -139,18 +138,6 @@ void WGSLColorTextFragment::PrepareCMD(Command* cmd, HWDrawContext* context) {
     return;
   }
 
-  auto group = cmd->pipeline->GetBindingGroup(1);
-
-  auto entry = group->GetEntry(5);
-
-  if (entry == nullptr || entry->type_definition->name != "vec4<f32>") {
-    return;
-  }
-
-  entry->type_definition->SetData(&color_, sizeof(Color4f));
-
-  UploadBindGroup(group->group, entry, cmd, context);
-
   if (filter_ != nullptr) {
     filter_->SetupBindGroup(cmd, context);
   }
@@ -161,10 +148,6 @@ bool WGSLColorTextFragment::CanMerge(const HWWGSLFragment* other) const {
     return false;
   }
   if (GetShaderName() != other->GetShaderName()) {
-    return false;
-  }
-  auto o = static_cast<const WGSLColorTextFragment*>(other);
-  if (color_ != o->color_) {
     return false;
   }
   return true;

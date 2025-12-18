@@ -73,9 +73,8 @@ class WGSLTextFragment : public HWWGSLFragment {
 class WGSLColorTextFragment : public WGSLTextFragment {
  public:
   WGSLColorTextFragment(BatchedTexture textures,
-                        std::shared_ptr<GPUSampler> sampler, Color4f color)
-      : WGSLTextFragment(std::move(textures), std::move(sampler)),
-        color_(color) {}
+                        std::shared_ptr<GPUSampler> sampler)
+      : WGSLTextFragment(std::move(textures), std::move(sampler)) {}
 
   ~WGSLColorTextFragment() override = default;
 
@@ -88,9 +87,6 @@ class WGSLColorTextFragment : public WGSLTextFragment {
   bool CanMerge(const HWWGSLFragment* other) const override;
 
   void PrepareCMD(Command* cmd, HWDrawContext* context) override;
-
- private:
-  Color4f color_;
 };
 
 class WGSLColorEmojiFragment : public WGSLTextFragment {

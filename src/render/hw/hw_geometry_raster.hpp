@@ -24,8 +24,6 @@ class HWGeometryRaster {
                    VectorCache<uint32_t>* index_vector_cache);
   virtual ~HWGeometryRaster();
 
-  void FillTextRect(Vec4 const& bounds, Vec2 const& uv_lt, Vec2 const& uv_rb);
-
   uint32_t GetFrontCount() const { return front_count_; }
 
   uint32_t GetBackCount() const { return back_count_; }
