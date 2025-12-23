@@ -6,6 +6,8 @@
 #define SRC_RENDER_HW_DRAW_GEOMETRY_WGSL_TEXT_GEOMETRY_HPP
 
 #include "src/render/hw/draw/hw_wgsl_geometry.hpp"
+#include "src/render/hw/hw_stage_buffer.hpp"
+#include "src/utils/batch_group.hpp"
 
 namespace skity {
 
@@ -24,8 +26,10 @@ class WGSLTextGeometry : public HWWGSLGeometry {
  public:
   static constexpr const char* kTextCommonVertex = R"(
     struct TextVSInput {
-        @location(0) a_pos : vec2<f32>,
-        @location(1) a_uv  : vec2<f32>,
+        @location(0) a_offset : vec4<f32>,
+        @location(1) a_pos    : vec4<f32>,
+        @location(2) a_uv     : vec4<f32>,
+        @location(3) a_color  : vec4<f32>
     };
 
     fn get_texture_index(u: f32) -> i32 {
@@ -42,14 +46,15 @@ class WGSLTextGeometry : public HWWGSLGeometry {
   )";
 
   explicit WGSLTextGeometry(const Matrix& transform,
-                            ArrayList<GlyphRect, 16> glyph_rects) {
+                            ArrayList<GlyphRect, 16> glyph_rects, Paint paint) {
     for (auto&& glyph_rect : glyph_rects) {
       auto rect = transform.MapRect(
           {glyph_rect.vertex_coord.x, glyph_rect.vertex_coord.y,
            glyph_rect.vertex_coord.z, glyph_rect.vertex_coord.w});
       glyph_rect.vertex_coord = {rect.Left(), rect.Top(), rect.Right(),
                                  rect.Bottom()};
-      glyph_rects_.emplace_back(std::move(glyph_rect));
+      glyph_rects_.emplace_back(BatchGroup<GlyphRect>(
+          {std::move(glyph_rect), std::move(paint), std::move(transform)}));
     }
   }
 
@@ -64,15 +69,20 @@ class WGSLTextGeometry : public HWWGSLGeometry {
   void PrepareCMD(Command* cmd, HWDrawContext* context, const Matrix& transform,
                   float clip_depth, Command* stencil_cmd) override;
 
+  static GPUBufferView CreateVertexBufferView(HWStageBuffer* stage_bufer);
+
+  static GPUBufferView CreateIndexBufferView(HWStageBuffer* stage_bufer);
+
  private:
-  std::vector<GlyphRect> glyph_rects_;
+  std::vector<BatchGroup<GlyphRect>> glyph_rects_;
 };
 
 class WGSLTextSolidColorGeometry : public WGSLTextGeometry {
  public:
   explicit WGSLTextSolidColorGeometry(const Matrix& transform,
-                                      ArrayList<GlyphRect, 16> glyph_rects)
-      : WGSLTextGeometry(transform, std::move(glyph_rects)) {}
+                                      ArrayList<GlyphRect, 16> glyph_rects,
+                                      Paint paint)
+      : WGSLTextGeometry(transform, std::move(glyph_rects), std::move(paint)) {}
 
   ~WGSLTextSolidColorGeometry() override = default;
 
@@ -89,7 +99,7 @@ class WGSLTextGradientGeometry : public WGSLTextGeometry {
                                     ArrayList<GlyphRect, 16> glyph_rects,
                                     const Matrix& local_matrix,
                                     const Matrix& local_to_device)
-      : WGSLTextGeometry(transform, std::move(glyph_rects)) {
+      : WGSLTextGeometry(transform, std::move(glyph_rects), Paint()) {
     Matrix local_inv;
     local_matrix.Invert(&local_inv);
     Matrix device_to_local;

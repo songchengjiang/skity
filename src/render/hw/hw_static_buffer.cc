@@ -13,6 +13,7 @@
 #include "src/render/hw/draw/geometry/wgsl_rrect_geometry.hpp"
 #include "src/render/hw/draw/geometry/wgsl_tess_path_fill_geometry.hpp"
 #include "src/render/hw/draw/geometry/wgsl_tess_path_stroke_geometry.hpp"
+#include "src/render/hw/draw/geometry/wgsl_text_geometry.hpp"
 
 namespace skity {
 
@@ -70,6 +71,20 @@ GPUBufferView HWStaticBuffer::GetRRectIndexBufferView() {
   return rrect_index_buffer_view_.value();
 }
 
+GPUBufferView HWStaticBuffer::GetTextVertexBufferView() {
+  if (!initialized_) {
+    Initialize();
+  }
+  return text_vertex_buffer_view_.value();
+}
+
+GPUBufferView HWStaticBuffer::GetTextIndexBufferView() {
+  if (!initialized_) {
+    Initialize();
+  }
+  return text_index_buffer_view_.value();
+}
+
 void HWStaticBuffer::Initialize() {
   tess_path_fill_vertex_buffer_view_ =
       WGSLTessPathFillGeometry::CreateVertexBufferView(stage_buffer_.get());
@@ -83,6 +98,10 @@ void HWStaticBuffer::Initialize() {
       WGSLRRectGeometry::CreateVertexBufferView(stage_buffer_.get());
   rrect_index_buffer_view_ =
       WGSLRRectGeometry::CreateIndexBufferView(stage_buffer_.get());
+  text_vertex_buffer_view_ =
+      WGSLTextGeometry::CreateVertexBufferView(stage_buffer_.get());
+  text_index_buffer_view_ =
+      WGSLTextGeometry::CreateIndexBufferView(stage_buffer_.get());
 
   initialized_ = true;
   needs_flush_ = true;

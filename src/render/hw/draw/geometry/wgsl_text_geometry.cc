@@ -19,14 +19,30 @@ const std::vector<GPUVertexBufferLayout>& WGSLTextGeometry::GetBufferLayout()
           GPUVertexStepMode::kVertex,
           {
               GPUVertexAttribute{
-                  GPUVertexFormat::kFloat32x2,
+                  GPUVertexFormat::kFloat32x4,
                   0,
                   0,
               },
+          },
+      },
+      GPUVertexBufferLayout{
+          12 * sizeof(float),
+          GPUVertexStepMode::kInstance,
+          {
               GPUVertexAttribute{
-                  GPUVertexFormat::kFloat32x2,
-                  2 * sizeof(float),
+                  GPUVertexFormat::kFloat32x4,
+                  0,
                   1,
+              },
+              GPUVertexAttribute{
+                  GPUVertexFormat::kFloat32x4,
+                  4 * sizeof(float),
+                  2,
+              },
+              GPUVertexAttribute{
+                  GPUVertexFormat::kFloat32x4,
+                  8 * sizeof(float),
+                  3,
               },
           },
       },
@@ -34,6 +50,14 @@ const std::vector<GPUVertexBufferLayout>& WGSLTextGeometry::GetBufferLayout()
 
   return layout;
 }
+
+struct Instance {
+  Vec4 vertex_coord;
+  Vec4 texture_coord;
+  Vec4 color;
+};
+
+static_assert(sizeof(Instance) == 48);
 
 void WGSLTextGeometry::PrepareCMD(Command* cmd, HWDrawContext* context,
                                   const Matrix& transform, float clip_depth,
@@ -44,25 +68,22 @@ void WGSLTextGeometry::PrepareCMD(Command* cmd, HWDrawContext* context,
     return;
   }
 
-  Paint paint;
-  paint.SetStyle(Paint::kFill_Style);
-  HWPathFillRaster raster{paint, transform, context->vertex_vector_cache,
-                          context->index_vector_cache};
+  cmd->vertex_buffer = context->static_buffer->GetTextVertexBufferView();
+  cmd->index_buffer = context->static_buffer->GetTextIndexBufferView();
+  cmd->index_count = cmd->index_buffer.range / sizeof(uint32_t);
 
+  context->stageBuffer->BeginWritingInstance(
+      glyph_rects_.size() * sizeof(Instance), alignof(Instance));
   for (auto& glyph_rect : glyph_rects_) {
-    raster.FillTextRect(glyph_rect.vertex_coord, glyph_rect.texture_coord_tl,
-                        glyph_rect.texture_coord_br);
+    context->stageBuffer->AppendInstance<Instance>(
+        glyph_rect.item.vertex_coord,
+        Vec4{glyph_rect.item.texture_coord_tl,
+             glyph_rect.item.texture_coord_br},
+        glyph_rect.paint.GetColor4f());
   }
-
-  const auto& vertex = raster.GetRawVertexBuffer();
-  const auto& index = raster.GetRawIndexBuffer();
-
-  cmd->vertex_buffer = context->stageBuffer->Push(
-      const_cast<float*>(vertex.data()), vertex.size() * sizeof(float));
-  cmd->index_buffer = context->stageBuffer->PushIndex(
-      const_cast<uint32_t*>(index.data()), index.size() * sizeof(uint32_t));
-
-  cmd->index_count = index.size();
+  auto instance_buffer_view = context->stageBuffer->EndWritingInstance();
+  cmd->instance_count = instance_buffer_view.range / sizeof(Instance);
+  cmd->instance_buffer = instance_buffer_view;
 
   auto pipeline = cmd->pipeline;
 
@@ -91,6 +112,42 @@ void WGSLTextGeometry::Merge(const HWWGSLGeometry* other) {
   }
 }
 
+namespace {
+
+struct Vertex {
+  Vec4 vertex_offset;
+};
+
+static_assert(sizeof(Vertex) == 16);
+
+}  // namespace
+
+GPUBufferView WGSLTextGeometry::CreateVertexBufferView(
+    HWStageBuffer* stage_bufer) {
+  auto vertex_array = std::array<Vertex, 4>{
+      // Top Left
+      Vertex{Vec4{1, 1, 0, 0}},
+      // Bottom Left
+      Vertex{Vec4{1, 0, 0, 1}},
+      // Top Right
+      Vertex{Vec4{0, 1, 1, 0}},
+      // Bottom Right
+      Vertex{Vec4{0, 0, 1, 1}},
+  };
+
+  return stage_bufer->Push(reinterpret_cast<float*>(vertex_array.data()),
+                           vertex_array.size() * sizeof(Vertex));
+}
+
+GPUBufferView WGSLTextGeometry::CreateIndexBufferView(
+    HWStageBuffer* stage_bufer) {
+  auto index_array = std::array<uint32_t, 6>{
+      0, 1, 2, 1, 3, 2,
+  };
+  return stage_bufer->PushIndex(const_cast<uint32_t*>(index_array.data()),
+                                index_array.size() * sizeof(uint32_t));
+}
+
 std::string WGSLTextSolidColorGeometry::GenSourceWGSL() const {
   std::string wgsl_code = CommonVertexWGSL();
 
@@ -101,15 +158,21 @@ std::string WGSLTextSolidColorGeometry::GenSourceWGSL() const {
         @builtin(position)              pos         : vec4<f32>,
         @location(0) @interpolate(flat) txt_index   : i32,
         @location(1)                    v_uv        : vec2<f32>,
+        @location(2)                    v_color     : vec4<f32>
     };
 
     @vertex
     fn vs_main(text_in: TextVSInput) -> TextSolidColorVSOutput {
         var output: TextSolidColorVSOutput;
+        var pos: vec2<f32> = vec2<f32>(text_in.a_offset.x * text_in.a_pos.x + text_in.a_offset.z * text_in.a_pos.z,
+                                       text_in.a_offset.y * text_in.a_pos.y + text_in.a_offset.w * text_in.a_pos.w);
+        var uv: vec2<f32> = vec2<f32>(text_in.a_offset.x * text_in.a_uv.x + text_in.a_offset.z * text_in.a_uv.z,
+                                       text_in.a_offset.y * text_in.a_uv.y + text_in.a_offset.w * text_in.a_uv.w);
 
-        output.pos          = get_vertex_position(text_in.a_pos, common_slot);
-        output.txt_index    = get_texture_index(text_in.a_uv.x);
-        output.v_uv         = get_texture_uv(text_in.a_uv);
+        output.pos          = get_vertex_position(pos, common_slot);
+        output.txt_index    = get_texture_index(uv.x);
+        output.v_uv         = get_texture_uv(uv);
+        output.v_color      = text_in.a_color;
         return output;
     }
   )";
@@ -136,10 +199,15 @@ std::string WGSLTextGradientGeometry::GenSourceWGSL() const {
     fn vs_main(text_in: TextVSInput) -> TextGradientVSOutput {
         var output: TextGradientVSOutput;
 
-        output.pos          = get_vertex_position(text_in.a_pos, common_slot);
-        output.txt_index    = get_texture_index(text_in.a_uv.x);
-        output.v_uv         = get_texture_uv(text_in.a_uv);
-        output.v_pos        = (inv_matrix * common_slot.userTransform * vec4<f32>(text_in.a_pos, 0.0, 1.0)).xy;
+        var pos: vec2<f32> = vec2<f32>(text_in.a_offset.x * text_in.a_pos.x + text_in.a_offset.z * text_in.a_pos.z,
+                                       text_in.a_offset.y * text_in.a_pos.y + text_in.a_offset.w * text_in.a_pos.w);
+        var uv: vec2<f32> = vec2<f32>(text_in.a_offset.x * text_in.a_uv.x + text_in.a_offset.z * text_in.a_uv.z,
+                                       text_in.a_offset.y * text_in.a_uv.y + text_in.a_offset.w * text_in.a_uv.w);
+
+        output.pos          = get_vertex_position(pos, common_slot);
+        output.txt_index    = get_texture_index(uv.x);
+        output.v_uv         = get_texture_uv(uv);
+        output.v_pos        = (inv_matrix * common_slot.userTransform * vec4<f32>(pos, 0.0, 1.0)).xy;
 
         return output;
     }

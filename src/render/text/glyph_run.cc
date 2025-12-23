@@ -174,8 +174,11 @@ HWDraw* DirectGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
         final_transform, std::move(glyph_rects),
         paint_.GetShader()->GetLocalMatrix(), transform);
   } else {
+    Paint paint_copy = paint_;
+    paint_copy.SetFillColor(color);
+    paint_copy.SetStrokeColor(color);
     geometry = arena_allocator->Make<WGSLTextSolidColorGeometry>(
-        final_transform, std::move(glyph_rects));
+        final_transform, std::move(glyph_rects), paint_copy);
   }
 
   HWWGSLFragment* fragment;
@@ -195,7 +198,7 @@ HWDraw* DirectGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
           paint_.GetAlphaF());
     } else {
       fragment = arena_allocator->Make<WGSLColorTextFragment>(
-          std::move(gpu_texture), std::move(gpu_sampler), color);
+          std::move(gpu_texture), std::move(gpu_sampler));
     }
   } else {
     fragment = arena_allocator->Make<WGSLColorEmojiFragment>(
@@ -416,8 +419,8 @@ HWDraw* SDFGlyphRun::Draw(Matrix transform, ArenaAllocator* arena_allocator,
       HWDynamicSdfTextDraw::CalcTransform(text_transform, 1.0f);
 
   WGSLTextSolidColorGeometry* geometry =
-      arena_allocator->Make<WGSLTextSolidColorGeometry>(final_transform,
-                                                        std::move(glyph_rects));
+      arena_allocator->Make<WGSLTextSolidColorGeometry>(
+          final_transform, std::move(glyph_rects), paint_);
 
   auto gpu_sampler =
       atlas_->GetGPUSampler(group_index_, GPUFilterMode::kLinear);

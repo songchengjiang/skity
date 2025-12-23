@@ -21,24 +21,6 @@ HWGeometryRaster::~HWGeometryRaster() {
   index_vector_cache_->StoreVector(index_buffer_);
 }
 
-void HWGeometryRaster::FillTextRect(const Vec4& bounds, const Vec2& uv_lt,
-                                    const Vec2& uv_rb) {
-  Vec2 left_top = {bounds.x, bounds.y};
-  Vec2 left_bottom = {bounds.x, bounds.w};
-  Vec2 top_right = {bounds.z, left_top.y};
-  Vec2 right_bottom = {bounds.z, bounds.w};
-
-  Vec2 uv_tr = {uv_rb.x, uv_lt.y};
-  Vec2 uv_lb = {uv_lt.x, uv_rb.y};
-
-  auto a = AppendVertex(left_top.x, left_top.y, uv_lt.x, uv_lt.y);
-  auto b = AppendVertex(left_bottom.x, left_bottom.y, uv_lb.x, uv_lb.y);
-  auto c = AppendVertex(top_right.x, top_right.y, uv_tr.x, uv_tr.y);
-  auto d = AppendVertex(right_bottom.x, right_bottom.y, uv_rb.x, uv_rb.y);
-
-  AppendRect(a, b, c, d);
-}
-
 uint32_t HWGeometryRaster::AppendLineVertex(Vec2 const& p) {
   return AppendVertex(p.x, p.y, 1.0f);
 }

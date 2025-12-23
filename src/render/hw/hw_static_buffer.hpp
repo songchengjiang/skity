@@ -36,6 +36,10 @@ class HWStaticBuffer final {
 
   GPUBufferView GetRRectIndexBufferView();
 
+  GPUBufferView GetTextVertexBufferView();
+
+  GPUBufferView GetTextIndexBufferView();
+
  private:
   void Initialize();
 
@@ -47,6 +51,8 @@ class HWStaticBuffer final {
   std::optional<GPUBufferView> tess_path_stroke_index_buffer_view_;
   std::optional<GPUBufferView> rrect_vertex_buffer_view_;
   std::optional<GPUBufferView> rrect_index_buffer_view_;
+  std::optional<GPUBufferView> text_vertex_buffer_view_;
+  std::optional<GPUBufferView> text_index_buffer_view_;
   bool initialized_ = false;
   bool needs_flush_ = false;
 };
